@@ -2,7 +2,6 @@ locals {
   location       = "eastus2"
   infrastructure_id = "0fec8a51-9bf7-4ae3-9f7d-edfc8654c1d4"
   infrastructure_prefix = substr(local.infrastructure_id, 0, 6)
-  user_object_id = "jim@musana.engineering"
 
   tags = {
     provisioner = "terraform"

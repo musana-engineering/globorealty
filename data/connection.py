@@ -19,6 +19,7 @@ subscription_id = os.getenv("SUBSCRIPTION_ID")
 resource_group_name = os.getenv("RESOURCE_GROUP_NAME")
 workspace_name = os.getenv("WORKSPACE_NAME")
 
+
 ml_client = MLClient(
     DefaultAzureCredential(),
     subscription_id=subscription_id,
@@ -26,29 +27,36 @@ ml_client = MLClient(
     workspace_name=workspace_name
 )
 
-# Test Workspace connection
+# Verify the ML Client connection is succesful by querying the workspace
 workspace_details = ml_client.workspaces.get(
     name=workspace_name
 )
 
-print
+print(json.dumps(workspace_details._to_dict(), indent=4))
 
-"""
-
-# If using username/password, the name/password values should be url-encoded
 import urllib.parse
 username = urllib.parse.quote(os.environ["SNOWFLAKEDB_USERNAME"], safe="")
 password = urllib.parse.quote(os.environ["SNOWFLAKEDB_PASSWORD"], safe="")
 
-target= "jdbc:snowflake://<myaccount>.snowflakecomputing.com/?db=<mydb>&warehouse=<mywarehouse>&role=<myrole>"
-# add the Snowflake account, database, warehouse name and role name here. If no role name provided it will default to PUBLIC
-name="snowflake-connection" # name of the connection
-wps_connection = WorkspaceConnection(name= name,
-type="snowflake",
-target= target,
-credentials= UsernamePasswordConfiguration(username=username, password=password)
-)
+snowflake_account = os.getenv("SNOWFLAKE_ACCOUNT")
+snowflake_database = os.getenv("SNOWFLAKE_DATABASE")
+snowflake_warehouse = os.getenv("SNOWFLAKE_WAREHOUSE")
+snowflake_role = os.getenv("SNOWFLAKE_ROLE")
+snowflake_db_username = os.getenv("SNOWFLAKEDB_USERNAME")
+snowflake_db_password = os.getenv("SNOWFLAKEDB_PASSWORD")
 
-ml_client.connections.create_or_update(workspace_connection=wps_connection)
+snowflake_connection_string = f"jdbc:snowflake://{snowflake_account}.snowflakecomputing.com/?db={snowflake_database}&warehouse={snowflake_warehouse}&role={snowflake_role}"
+connection_name = "Conn-Snowflake" 
 
-"""
+try:
+    ml_client.connections.get(name=connection_name)
+    print("Connection with the same name already exists")
+except:
+    wps_connection = WorkspaceConnection(
+        name=connection_name,
+        type="snowflake",
+        target=snowflake_connection_string,
+        credentials=UsernamePasswordConfiguration(username=snowflake_db_username, password=snowflake_db_password)
+    )
+    ml_client.connections.create_or_update(workspace_connection=wps_connection)
+    print("Workspace connection created.")
