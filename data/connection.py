@@ -39,7 +39,7 @@ snowflake_db_username = os.getenv("SNOWFLAKEDB_USERNAME")
 snowflake_db_password = os.getenv("SNOWFLAKEDB_PASSWORD")
 
 snowflake_connection_string = f"jdbc:snowflake://{snowflake_account}.snowflakecomputing.com/?db={snowflake_database}&warehouse={snowflake_warehouse}&role={snowflake_role}"
-connection_name = "Conn-Snowflake" 
+connection_name = "Snowflake" 
 
 try:
     ml_client.connections.get(name=connection_name)
