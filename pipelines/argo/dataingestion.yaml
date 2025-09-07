@@ -14,11 +14,11 @@ spec:
     - name: infrastructure-repository
       value: https://github.com/musana-engineering/globorealty.git
   templates:
-    - name: plan
+    - name: connection
       inputs:
         artifacts:
-        - name: terraform
-          path: /home/terraform
+        - name: scripts
+          path: /home/scripts
           git:
             repo: "{{workflow.parameters.infrastructure-repository}}"
             depth: 1
@@ -31,37 +31,21 @@ spec:
         image: "{{workflow.parameters.docker-image}}"
         command: ["sh"]
         source: |
-          cp /home/terraform/*.tf /home/argo/
 
-          export ARM_CLIENT_ID="your_azure_sp_client_id"
-          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
-          export ARM_TENANT_ID="your_azure_tenant_id"
-          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
+          cd /home/scripts/globorealty/scripts
 
-          /bin/terraform init -input=false /home/argo
-          /bin/terraform plan -parallelism=2 -input=false -no-color -out=/home/argo/tfclientsplan /home/argo >> /tmp/terraform-change.log
         env:
         - name: CLIENT_SECRET
           valueFrom:
             secretKeyRef:
               name: pipeline-secrets
               key: CLIENT_SECRET  
-      outputs:
-        artifacts:
-          - name: terraform-plan
-            path: /home/argo/
-            archive:
-              none: {}
-          - name: terraform-log
-            path: /tmp/terraform-change.log
-            archive:
-              none: {}
 
-    - name: apply
+    - name: datastore
       inputs:
         artifacts:
-        - name: terraform-plan
-          path: /home/terraform
+        - name: scripts-plan
+          path: /home/scripts
         volumes:
         - name: pipeline-secrets
           secret: 
@@ -73,11 +57,9 @@ spec:
         source: |
 
           export ARM_CLIENT_ID="your_azure_sp_client_id"
-          export ARM_CLIENT_SECRET="your_azure_sp_client_secret"
+          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
           export ARM_TENANT_ID="your_azure_tenant_id"
           export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
-
-          /bin/terraform apply -input=false -parallelism=2 -no-color /home/terraform/tfclientsplan
 
         env:
         - name: CLIENT_SECRET
@@ -86,21 +68,71 @@ spec:
               name: pipeline-secrets
               key: CLIENT_SECRET  
 
-    - name: approve
-      suspend: {}
+    - name: data-asset
+      inputs:
+        artifacts:
+        - name: scripts-plan
+          path: /home/scripts
+        volumes:
+        - name: pipeline-secrets
+          secret: 
+            secretName: data-0fec8a
+      script:
+        imagePullPolicy: "Always"
+        image: "{{workflow.parameters.docker-image}}"
+        command: ["sh"]
+        source: |
+
+          export ARM_CLIENT_ID="your_azure_sp_client_id"
+          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
+          export ARM_TENANT_ID="your_azure_tenant_id"
+          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
+
+        env:
+        - name: CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pipeline-secrets
+              key: CLIENT_SECRET  
+
+    - name: validation
+      inputs:
+        artifacts:
+        - name: scripts-plan
+          path: /home/scripts
+        volumes:
+        - name: pipeline-secrets
+          secret: 
+            secretName: data-0fec8a
+      script:
+        imagePullPolicy: "Always"
+        image: "{{workflow.parameters.docker-image}}"
+        command: ["sh"]
+        source: |
+
+          export ARM_CLIENT_ID="your_azure_sp_client_id"
+          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
+          export ARM_TENANT_ID="your_azure_tenant_id"
+          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
+
+        env:
+        - name: CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pipeline-secrets
+              key: CLIENT_SECRET  
 
     - name: update
       dag:
         tasks:
-          - name: plan
-            template: plan
-          - name: approve
-            dependencies: [plan]
-            template: approve
-          - name: apply
-            template: apply
-            dependencies: [plan, approve]
-            arguments:
-              artifacts:
-              - name: terraform-plan
-                from: "{{tasks.plan.outputs.artifacts.terraform-plan}}"
+          - name: connection
+            template: connection
+          - name: datastore
+            template: datastore
+            dependencies: [connection]
+          - name: data-asset
+            template: data-asset
+            dependencies: [connection, datastore]
+          - name: validation
+            template: validation
+            dependencies: [connection, datastore, data-asset]
