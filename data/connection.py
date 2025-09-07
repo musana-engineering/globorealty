@@ -26,10 +26,11 @@ ml_client = MLClient(
     workspace_name=workspace_name
 )
 
-# Verify the ML Client connection is succesful by querying the workspace
+# Verify the client connection is succesful by querying the workspace
 workspace_details = ml_client.workspaces.get(name=workspace_name)
 print(json.dumps(workspace_details._to_dict(), indent=4))
 
+# Define the connection information
 import urllib.parse
 snowflake_account = os.getenv("SNOWFLAKE_ACCOUNT")
 snowflake_database = os.getenv("SNOWFLAKE_DATABASE")
@@ -41,6 +42,7 @@ snowflake_db_password = os.getenv("SNOWFLAKEDB_PASSWORD")
 snowflake_connection_string = f"jdbc:snowflake://{snowflake_account}.snowflakecomputing.com/?db={snowflake_database}&warehouse={snowflake_warehouse}&role={snowflake_role}"
 connection_name = "Snowflake" 
 
+# Create the connection
 try:
     ml_client.connections.get(name=connection_name)
     print("Connection with the same name already exists")
