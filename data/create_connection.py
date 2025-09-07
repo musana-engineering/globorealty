@@ -1,34 +1,11 @@
 from azure.ai.ml import MLClient, command, Input
 from azure.ai.ml.entities import WorkspaceConnection
 from azure.ai.ml.entities import UsernamePasswordConfiguration
-from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 import os, json
-
-from azure.ai.ml.entities import (
-    AzureBlobDatastore,
-    AzureFileDatastore,
-    AzureDataLakeGen2Datastore,
-    AccountKeyConfiguration,
-    Environment
-)
+from create_client import ml_client, workspace_name
 
 load_dotenv()
-
-subscription_id = os.getenv("SUBSCRIPTION_ID")
-resource_group_name = os.getenv("RESOURCE_GROUP_NAME")
-workspace_name = os.getenv("WORKSPACE_NAME")
-
-ml_client = MLClient(
-    DefaultAzureCredential(),
-    subscription_id=subscription_id,
-    resource_group_name=resource_group_name,
-    workspace_name=workspace_name
-)
-
-# Verify the client connection is succesful by querying the workspace
-workspace_details = ml_client.workspaces.get(name=workspace_name)
-print(json.dumps(workspace_details._to_dict(), indent=4))
 
 # Define the connection information
 import urllib.parse
@@ -55,3 +32,9 @@ except:
     )
     ml_client.connections.create_or_update(workspace_connection=wps_connection)
     print("Workspace connection created.")
+
+# Return list of connections to verify the new connection exists
+verify_connection_creation = ml_client.connections.list(connection_type="snowflake")
+print("\nConnection details:")
+for connection in verify_connection_creation:
+    print(json.dumps(connection._to_dict(), indent=4))
