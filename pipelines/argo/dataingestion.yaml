@@ -4,7 +4,7 @@ metadata:
   name: data-0fec8a
   namespace: argo
 spec:
-  entrypoint: update
+  entrypoint: pipeline
   podGC:
     strategy: OnWorkflowSuccess
   arguments:
@@ -14,7 +14,7 @@ spec:
     - name: infrastructure-repository
       value: https://github.com/musana-engineering/globorealty.git
   templates:
-    - name: connection
+    - name: create-connection
       inputs:
         artifacts:
         - name: scripts
@@ -32,16 +32,29 @@ spec:
         command: ["sh"]
         source: |
 
+          export SUBSCRIPTION_ID=my_azure_ml_subscription_id
+          export RESOURCE_GROUP_NAME=my_azure_ml_subscription_id
+          export WORKSPACE_NAME=my_azure_ml_workspace_name
+
+          export SNOWFLAKE_ACCOUNT=my_snowflake_account_name
+          export SNOWFLAKEDB_USERNAME=my_snowflake_db_username
+          export SNOWFLAKEDB_PASSWORD=$SNOWFLAKEDB_PASSWORD
+          export SNOWFLAKE_DATABASE=my_snowflake_database
+          export SNOWFLAKE_WAREHOUSE=my_snowflake_warehouse
+          export SNOWFLAKE_ROLE=my_snowflake_role
+
           cd /home/scripts/globorealty/scripts
 
+          python create_connection.py
+
         env:
-        - name: CLIENT_SECRET
+        - name: SNOWFLAKEDB_PASSWORD
           valueFrom:
             secretKeyRef:
               name: pipeline-secrets
-              key: CLIENT_SECRET  
+              key: SNOWFLAKEDB_PASSWORD  
 
-    - name: datastore
+    - name: create-datastore
       inputs:
         artifacts:
         - name: scripts-plan
@@ -56,19 +69,39 @@ spec:
         command: ["sh"]
         source: |
 
-          export ARM_CLIENT_ID="your_azure_sp_client_id"
-          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
-          export ARM_TENANT_ID="your_azure_tenant_id"
-          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
+          export STORAGE_ACCOUNT_NAME=my_azure_ml_storage_account_name
+          export STORAGE_ACCOUNT_ACCESS_KEY=$STORAGE_ACCOUNT_ACCESS_KEY
+
+          cd /home/scripts/globorealty/scripts
+
+          python create_datastore.py
 
         env:
-        - name: CLIENT_SECRET
+        - name: STORAGE_ACCOUNT_ACCESS_KEY
           valueFrom:
             secretKeyRef:
               name: pipeline-secrets
-              key: CLIENT_SECRET  
+              key: STORAGE_ACCOUNT_ACCESS_KEY  
 
-    - name: data-asset
+    - name: create-dataset
+      inputs:
+        artifacts:
+        - name: scripts-plan
+          path: /home/scripts
+        volumes:
+        - name: pipeline-secrets
+          secret: 
+            secretName: data-0fec8a
+      script:
+        imagePullPolicy: "Always"
+        image: "{{workflow.parameters.docker-image}}"
+        command: ["sh"]
+        source: |
+         
+         cd /home/scripts/globorealty/scripts
+         python create_dataset.py
+
+    - name: preview-data
       inputs:
         artifacts:
         - name: scripts-plan
@@ -83,56 +116,20 @@ spec:
         command: ["sh"]
         source: |
 
-          export ARM_CLIENT_ID="your_azure_sp_client_id"
-          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
-          export ARM_TENANT_ID="your_azure_tenant_id"
-          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
+         cd /home/scripts/globorealty/scripts
+         python create_dataframe.py
 
-        env:
-        - name: CLIENT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: pipeline-secrets
-              key: CLIENT_SECRET  
-
-    - name: validation
-      inputs:
-        artifacts:
-        - name: scripts-plan
-          path: /home/scripts
-        volumes:
-        - name: pipeline-secrets
-          secret: 
-            secretName: data-0fec8a
-      script:
-        imagePullPolicy: "Always"
-        image: "{{workflow.parameters.docker-image}}"
-        command: ["sh"]
-        source: |
-
-          export ARM_CLIENT_ID="your_azure_sp_client_id"
-          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
-          export ARM_TENANT_ID="your_azure_tenant_id"
-          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
-
-        env:
-        - name: CLIENT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: pipeline-secrets
-              key: CLIENT_SECRET  
-
-    - name: update
+    - name: pipeline
       dag:
         tasks:
-          - name: connection
-            template: connection
-          - name: datastore
-            template: datastore
-            dependencies: [connection]
-          - name: data-asset
-            template: data-asset
-            dependencies: [connection, datastore]
-          - name: validation
-            template: validation
-            dependencies: [connection, datastore, data-asset]
+          - name: create-connection
+            template: create-connection
+          - name: create-datastore
+            template: create-datastore
+            dependencies: [create-connection]
+          - name: create-dataset
+            template: create-dataset
+            dependencies: [create-connection, create-datastore]
+          - name: preview-data
+            template: preview-data
+            dependencies: [create-connection, create-datastore, create-dataset]

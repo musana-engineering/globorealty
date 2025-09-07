@@ -8,7 +8,6 @@ from azure.core.exceptions import ResourceNotFoundError
 from create_client import ml_client, workspace_name
 
 
-dataset_name = os.getenv("DATASET_NAME")
 raw_datastore_name = "rawdata"
 datastore_name = ml_client.datastores.get_default()
 storage_account_name = os.getenv("STORAGE_ACCOUNT_NAME")
