@@ -1,0 +1,105 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ml-data-acquisition-
+  namespace: ml-0fec8a
+spec:
+  entrypoint: main
+  podGC:
+    strategy: OnWorkflowSuccess
+  templates:
+  - name: main
+    steps:
+    - - name: terraform-init-apply
+        template: terraform
+    - - name: create-datastore
+        template: az-ml
+        arguments:
+          parameters:
+          - name: cmd
+            value: >
+              az ml datastore create --name globorealty_snowflake
+              --type snowflake
+              --account {{inputs.parameters.sf_account}}
+              --user {{inputs.parameters.sf_user}}
+              --password $(SF_PASSWORD)
+              --database REAL_ESTATE --schema CURATED --warehouse WH_ML_EXPORT
+    - - name: create-data-asset
+        template: az-ml
+        arguments:
+          parameters:
+          - name: cmd
+            value: >
+              az ml data create --name house_prices_bronze
+              --version 1 --path "azureml://datastores/globorealty_blob/paths/bronze/house_prices/"
+              --type uri_folder --description "raw bronze dataset"
+    - - name: ingest-snowflake-to-blob
+        template: runner
+        arguments:
+          parameters:
+          - name: cmd
+            value: >
+              python /app/scripts/run_ingest.py
+    - - name: verify-import
+        template: runner
+        arguments:
+          parameters:
+          - name: cmd
+            value: >
+              python /app/scripts/verify_ingest.py
+
+  templates:
+  - name: terraform
+    container:
+      image: hashicorp/terraform:1.7
+      workingDir: /workspace/infrastructure
+      command: ["/bin/sh","-lc"]
+      args:
+        - |
+          terraform init
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+      volumeMounts:
+        - { name: repo, mountPath: /workspace }
+      env:
+        - { name: ARM_SUBSCRIPTION_ID, valueFrom: { secretKeyRef: { name: azure, key: subscription } } }
+        - { name: ARM_TENANT_ID,       valueFrom: { secretKeyRef: { name: azure, key: tenant } } }
+        - { name: ARM_CLIENT_ID,       valueFrom: { secretKeyRef: { name: azure, key: clientId } } }
+        - { name: ARM_CLIENT_SECRET,   valueFrom: { secretKeyRef: { name: azure, key: clientSecret } } }
+
+  - name: az-ml
+    inputs:
+      parameters:
+      - name: cmd
+    container:
+      image: mcr.microsoft.com/azure-cli:2.63.0
+      command: ["/bin/sh","-lc"]
+      args:
+        - |
+          az login --service-principal \
+            -u $(AZURE_CLIENT_ID) -p $(AZURE_CLIENT_SECRET) --tenant $(AZURE_TENANT_ID)
+          az account set --subscription $(AZURE_SUBSCRIPTION_ID)
+          {{inputs.parameters.cmd}}
+      env:
+        - { name: AZURE_CLIENT_ID,     valueFrom: { secretKeyRef: { name: azure, key: clientId } } }
+        - { name: AZURE_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: azure, key: clientSecret } } }
+        - { name: AZURE_TENANT_ID,     valueFrom: { secretKeyRef: { name: azure, key: tenant } } }
+        - { name: AZURE_SUBSCRIPTION_ID, valueFrom: { secretKeyRef: { name: azure, key: subscription } } }
+        - { name: SF_PASSWORD,         valueFrom: { secretKeyRef: { name: snowflake, key: password } } }
+
+  - name: runner
+    inputs:
+      parameters:
+      - name: cmd
+    container:
+      image: ghcr.io/<your-org>/<your-repo>:pipeline-runner   # your app image
+      command: ["/bin/sh","-lc"]
+      args: ["{{inputs.parameters.cmd}}"]
+      volumeMounts:
+        - { name: repo, mountPath: /app }
+    # mount code via an initContainer/sidecar or use the image; choose your style
+
+  volumes:
+  - name: repo
+    persistentVolumeClaim:
+      claimName: repo-pvc
