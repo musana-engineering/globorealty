@@ -20,7 +20,7 @@ except ResourceNotFoundError:
         name=dataset_name,
         source=Database(
             connection=connection_name,
-            query=f"GLOBOREALTY.REAL_ESTATE.RAW"
+            query=f"SELECT * FROM GLOBOREALTY.REAL_ESTATE.RAW"
         ),
         path=f"azureml://datastores/{raw_datastore_name}/paths/{dataset_name}",
         version="1"
@@ -33,6 +33,3 @@ verify_dataset_creation = ml_client.datastores.list(include_secrets=False)
 print("\nDatastore details:")
 for dataset in verify_dataset_creation:
     print(json.dumps(dataset._to_dict(), indent=4))
-
-
-
