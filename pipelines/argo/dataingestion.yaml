@@ -1,105 +1,106 @@
 apiVersion: argoproj.io/v1alpha1
-kind: Workflow
+kind: WorkflowTemplate
 metadata:
-  generateName: ml-data-acquisition-
-  namespace: ml-0fec8a
+  name: data-0fec8a
+  namespace: argo
 spec:
-  entrypoint: main
+  entrypoint: update
   podGC:
     strategy: OnWorkflowSuccess
+  arguments:
+    parameters:
+    - name: docker-image
+      value: musanaengineering/platformtools:python:1.0.0
+    - name: infrastructure-repository
+      value: https://github.com/musana-engineering/globorealty.git
   templates:
-  - name: main
-    steps:
-    - - name: terraform-init-apply
-        template: terraform
-    - - name: create-datastore
-        template: az-ml
-        arguments:
-          parameters:
-          - name: cmd
-            value: >
-              az ml datastore create --name globorealty_snowflake
-              --type snowflake
-              --account {{inputs.parameters.sf_account}}
-              --user {{inputs.parameters.sf_user}}
-              --password $(SF_PASSWORD)
-              --database REAL_ESTATE --schema CURATED --warehouse WH_ML_EXPORT
-    - - name: create-data-asset
-        template: az-ml
-        arguments:
-          parameters:
-          - name: cmd
-            value: >
-              az ml data create --name house_prices_bronze
-              --version 1 --path "azureml://datastores/globorealty_blob/paths/bronze/house_prices/"
-              --type uri_folder --description "raw bronze dataset"
-    - - name: ingest-snowflake-to-blob
-        template: runner
-        arguments:
-          parameters:
-          - name: cmd
-            value: >
-              python /app/scripts/run_ingest.py
-    - - name: verify-import
-        template: runner
-        arguments:
-          parameters:
-          - name: cmd
-            value: >
-              python /app/scripts/verify_ingest.py
+    - name: plan
+      inputs:
+        artifacts:
+        - name: terraform
+          path: /home/terraform
+          git:
+            repo: "{{workflow.parameters.infrastructure-repository}}"
+            depth: 1
+        volumes:
+        - name: pipeline-secrets
+          secret: 
+            secretName: data-0fec8a
+      script:
+        imagePullPolicy: "Always"
+        image: "{{workflow.parameters.docker-image}}"
+        command: ["sh"]
+        source: |
+          cp /home/terraform/*.tf /home/argo/
 
-  templates:
-  - name: terraform
-    container:
-      image: hashicorp/terraform:1.7
-      workingDir: /workspace/infrastructure
-      command: ["/bin/sh","-lc"]
-      args:
-        - |
-          terraform init
-          terraform plan -out=tfplan
-          terraform apply -auto-approve tfplan
-      volumeMounts:
-        - { name: repo, mountPath: /workspace }
-      env:
-        - { name: ARM_SUBSCRIPTION_ID, valueFrom: { secretKeyRef: { name: azure, key: subscription } } }
-        - { name: ARM_TENANT_ID,       valueFrom: { secretKeyRef: { name: azure, key: tenant } } }
-        - { name: ARM_CLIENT_ID,       valueFrom: { secretKeyRef: { name: azure, key: clientId } } }
-        - { name: ARM_CLIENT_SECRET,   valueFrom: { secretKeyRef: { name: azure, key: clientSecret } } }
+          export ARM_CLIENT_ID="your_azure_sp_client_id"
+          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
+          export ARM_TENANT_ID="your_azure_tenant_id"
+          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
 
-  - name: az-ml
-    inputs:
-      parameters:
-      - name: cmd
-    container:
-      image: mcr.microsoft.com/azure-cli:2.63.0
-      command: ["/bin/sh","-lc"]
-      args:
-        - |
-          az login --service-principal \
-            -u $(AZURE_CLIENT_ID) -p $(AZURE_CLIENT_SECRET) --tenant $(AZURE_TENANT_ID)
-          az account set --subscription $(AZURE_SUBSCRIPTION_ID)
-          {{inputs.parameters.cmd}}
-      env:
-        - { name: AZURE_CLIENT_ID,     valueFrom: { secretKeyRef: { name: azure, key: clientId } } }
-        - { name: AZURE_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: azure, key: clientSecret } } }
-        - { name: AZURE_TENANT_ID,     valueFrom: { secretKeyRef: { name: azure, key: tenant } } }
-        - { name: AZURE_SUBSCRIPTION_ID, valueFrom: { secretKeyRef: { name: azure, key: subscription } } }
-        - { name: SF_PASSWORD,         valueFrom: { secretKeyRef: { name: snowflake, key: password } } }
+          /bin/terraform init -input=false /home/argo
+          /bin/terraform plan -parallelism=2 -input=false -no-color -out=/home/argo/tfclientsplan /home/argo >> /tmp/terraform-change.log
+        env:
+        - name: CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pipeline-secrets
+              key: CLIENT_SECRET  
+      outputs:
+        artifacts:
+          - name: terraform-plan
+            path: /home/argo/
+            archive:
+              none: {}
+          - name: terraform-log
+            path: /tmp/terraform-change.log
+            archive:
+              none: {}
 
-  - name: runner
-    inputs:
-      parameters:
-      - name: cmd
-    container:
-      image: ghcr.io/<your-org>/<your-repo>:pipeline-runner   # your app image
-      command: ["/bin/sh","-lc"]
-      args: ["{{inputs.parameters.cmd}}"]
-      volumeMounts:
-        - { name: repo, mountPath: /app }
-    # mount code via an initContainer/sidecar or use the image; choose your style
+    - name: apply
+      inputs:
+        artifacts:
+        - name: terraform-plan
+          path: /home/terraform
+        volumes:
+        - name: pipeline-secrets
+          secret: 
+            secretName: data-0fec8a
+      script:
+        imagePullPolicy: "Always"
+        image: "{{workflow.parameters.docker-image}}"
+        command: ["sh"]
+        source: |
 
-  volumes:
-  - name: repo
-    persistentVolumeClaim:
-      claimName: repo-pvc
+          export ARM_CLIENT_ID="your_azure_sp_client_id"
+          export ARM_CLIENT_SECRET="your_azure_sp_client_secret"
+          export ARM_TENANT_ID="your_azure_tenant_id"
+          export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
+
+          /bin/terraform apply -input=false -parallelism=2 -no-color /home/terraform/tfclientsplan
+
+        env:
+        - name: CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pipeline-secrets
+              key: CLIENT_SECRET  
+
+    - name: approve
+      suspend: {}
+
+    - name: update
+      dag:
+        tasks:
+          - name: plan
+            template: plan
+          - name: approve
+            dependencies: [plan]
+            template: approve
+          - name: apply
+            template: apply
+            dependencies: [plan, approve]
+            arguments:
+              artifacts:
+              - name: terraform-plan
+                from: "{{tasks.plan.outputs.artifacts.terraform-plan}}"

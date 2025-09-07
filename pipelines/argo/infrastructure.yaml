@@ -5,6 +5,8 @@ metadata:
   namespace: argo
 spec:
   entrypoint: update
+  podGC:
+    strategy: OnWorkflowSuccess
   arguments:
     parameters:
     - name: docker-image
@@ -29,15 +31,16 @@ spec:
         image: "{{workflow.parameters.docker-image}}"
         command: ["sh"]
         source: |
-          cp /home/terraform/*.tf /home/argo/
-
+    
           export ARM_CLIENT_ID="your_azure_sp_client_id"
           export ARM_CLIENT_SECRET="$CLIENT_SECRET"
           export ARM_TENANT_ID="your_azure_tenant_id"
           export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
 
-          /bin/terraform init -input=false /home/argo
-          /bin/terraform plan -parallelism=2 -input=false -no-color -out=/home/argo/tfclientsplan /home/argo >> /tmp/terraform-change.log
+          cd /home/terraform/globorealty/infrastructure
+
+          terraform init -input=false
+          terraform plan -parallelism=2 -input=false -no-color -out=/home/terraform/artifacts/Infrastructure.tfplan /home/argo >> /tmp/terraform-change.log
         env:
         - name: CLIENT_SECRET
           valueFrom:
@@ -47,7 +50,7 @@ spec:
       outputs:
         artifacts:
           - name: terraform-plan
-            path: /home/argo/
+            path: /home/terraform/home/terraform/artifacts/
             archive:
               none: {}
           - name: terraform-log
@@ -71,11 +74,11 @@ spec:
         source: |
 
           export ARM_CLIENT_ID="your_azure_sp_client_id"
-          export ARM_CLIENT_SECRET="your_azure_sp_client_secret"
+          export ARM_CLIENT_SECRET="$CLIENT_SECRET"
           export ARM_TENANT_ID="your_azure_tenant_id"
           export ARM_SUBSCRIPTION_ID="your_azure_subscription_id"
 
-          /bin/terraform apply -input=false -parallelism=2 -no-color /home/terraform/tfclientsplan
+          /bin/terraform apply -input=false -parallelism=2 -no-color /home/terraform/artifacts/Infrastructure.tfplan
 
         env:
         - name: CLIENT_SECRET
