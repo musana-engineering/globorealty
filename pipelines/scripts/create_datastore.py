@@ -9,7 +9,6 @@ from create_client import ml_client, workspace_name
 
 
 raw_datastore_name = "rawdata"
-datastore_name = ml_client.datastores.get_default()
 storage_account_name = os.getenv("STORAGE_ACCOUNT_NAME")
 storage_account_key = os.getenv("STORAGE_ACCOUNT_ACCESS_KEY")
 
@@ -22,8 +21,8 @@ create_datastore = AzureBlobDatastore(
 )
 
 try:
-    ml_client.datastores.get(name=datastore_name)
-    print("Datastore '{datastore_name}' already exists")
+    ml_client.datastores.get(name=raw_datastore_name)
+    print(f"Datastore '{raw_datastore_name}' already exists")
 except ResourceNotFoundError:
     ml_client.datastores.create_or_update(create_datastore)
     print(f"Datastore '{raw_datastore_name}' created")
