@@ -29,7 +29,7 @@ spec:
       script:
         imagePullPolicy: "Always"
         image: "{{workflow.parameters.docker-image}}"
-        command: ["sh"]
+        command: [/bin/bash]
         source: |
     
           export ARM_CLIENT_ID="your_azure_sp_client_id"
@@ -70,7 +70,7 @@ spec:
       script:
         imagePullPolicy: "Always"
         image: "{{workflow.parameters.docker-image}}"
-        command: ["sh"]
+        command: [/bin/bash]
         source: |
 
           export ARM_CLIENT_ID="your_azure_sp_client_id"
