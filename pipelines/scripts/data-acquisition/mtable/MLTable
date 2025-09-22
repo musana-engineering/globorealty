@@ -1,0 +1,14 @@
+paths:
+- file: azureml://subscriptions/fe7912b6-9fac-45dc-ad43-85f9e93cf2e7/resourcegroups/rg-1af8a5/workspaces/mlw-1af8a5/datastores/rawdata/paths/house_data.csv
+transformations:
+- read_delimited:
+    delimiter: ','
+    empty_as_string: false
+    encoding: utf8
+    header: all_files_same_headers
+    include_path_column: false
+    infer_column_types: true
+    partition_size: 20971520
+    path_column: Path
+    support_multi_line: false
+type: mltable

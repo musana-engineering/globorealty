@@ -1,6 +1,6 @@
 locals {
-  location       = "eastus2"
-  infrastructure_id = "0fec8a51-9bf7-4ae3-9f7d-edfc8654c1d4"
+  location              = "eastus2"
+  infrastructure_id     = "1af8a586-121e-404b-97b1-cc7efc4f44c3"
   infrastructure_prefix = substr(local.infrastructure_id, 0, 6)
 
   tags = {
@@ -26,12 +26,13 @@ resource "azurerm_application_insights" "ml" {
 }
 
 resource "azurerm_key_vault" "ml" {
-  name                            = "kv-${local.infrastructure_prefix}"
-  location                        = azurerm_resource_group.ml.location
-  resource_group_name             = azurerm_resource_group.ml.name
-  tenant_id                       = data.azurerm_client_config.current.tenant_id
-  sku_name                        = "standard"
-  enable_rbac_authorization       = true
+  name                = "kv-${local.infrastructure_prefix}"
+  location            = azurerm_resource_group.ml.location
+  resource_group_name = azurerm_resource_group.ml.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+  #enable_rbac_authorization       = true
+  rbac_authorization_enabled      = true
   enabled_for_deployment          = true
   enabled_for_template_deployment = true
   tags                            = local.tags

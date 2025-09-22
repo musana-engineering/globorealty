@@ -13,8 +13,8 @@ snowflake_account = os.getenv("SNOWFLAKE_ACCOUNT")
 snowflake_database = os.getenv("SNOWFLAKE_DATABASE")
 snowflake_warehouse = os.getenv("SNOWFLAKE_WAREHOUSE")
 snowflake_role = os.getenv("SNOWFLAKE_ROLE")
-snowflake_db_username = os.getenv("SNOWFLAKEDB_USERNAME")
-snowflake_db_password = os.getenv("SNOWFLAKEDB_PASSWORD")
+snowflake_db_username = urllib.parse.quote(os.getenv("SNOWFLAKEDB_USERNAME", ""), safe="")
+snowflake_db_password = urllib.parse.quote(os.getenv("SNOWFLAKEDB_PASSWORD", ""), safe="")
 
 snowflake_connection_string = f"jdbc:snowflake://{snowflake_account}.snowflakecomputing.com/?db={snowflake_database}&warehouse={snowflake_warehouse}&role={snowflake_role}"
 connection_name = "Snowflake" 
